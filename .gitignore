@@ -1,0 +1,11 @@
+node_modules/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.tfstate.lock.info
+tfplan
+tf-outputs.json
+crash.log
+jenkins/.env
+.env
+.DS_Store

@@ -1,0 +1,175 @@
+name: pipeline
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pipeline-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TF_VERSION: 1.13.5
+  ENVIRONMENT: prod
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+
+jobs:
+  test:
+    name: Build & test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Unit tests
+        working-directory: app
+        run: npm test
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: app/Dockerfile
+
+      - name: Build image (runs tests inside the image build too)
+        run: |
+          docker build --target test -t shipyard-api:test app
+          docker build --build-arg APP_VERSION=${{ github.sha }} -t shipyard-api:ci app
+
+      - name: Container smoke test
+        run: |
+          docker run -d --name api -p 8080:8080 --read-only shipyard-api:ci
+          ./scripts/smoke-test.sh http://localhost:8080 ${{ github.sha }}
+          docker logs api | head -5
+
+  terraform:
+    name: Terraform checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+
+      - name: Format
+        run: terraform fmt -check -recursive -diff infra
+
+      - name: Validate
+        run: |
+          for dir in infra/bootstrap infra/stack; do
+            terraform -chdir=$dir init -backend=false -input=false >/dev/null
+            terraform -chdir=$dir validate
+          done
+
+  plan:
+    name: Terraform plan
+    if: github.event_name == 'pull_request' && vars.AWS_PLAN_ROLE_ARN != '' && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [test, terraform]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Plan
+        run: |
+          ./scripts/terraform.sh plan "$ENVIRONMENT" "${{ github.event.pull_request.head.sha }}" | tee plan.txt
+          {
+            echo "### Terraform plan (${ENVIRONMENT})"
+            echo '```'
+            grep -E '^(Plan:|No changes)' plan.txt || tail -n 5 plan.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    name: Push image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.AWS_DEPLOY_ROLE_ARN != ''
+    needs: [test, terraform]
+    runs-on: ubuntu-24.04
+    environment: production
+    permissions:
+      contents: read
+      id-token: write
+    outputs:
+      image_tag: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push
+        env:
+          ECR_REGISTRY: ${{ steps.ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: ./scripts/build-push.sh
+
+  deploy:
+    name: Deploy to ECS
+    needs: build
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+      url: ${{ steps.apply.outputs.service_url }}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform apply
+        id: apply
+        run: |
+          ./scripts/terraform.sh apply "$ENVIRONMENT" "${{ needs.build.outputs.image_tag }}"
+          echo "service_url=$(jq -r .service_url.value tf-outputs.json)" >> "$GITHUB_OUTPUT"
+          echo "dashboard_url=$(jq -r .dashboard_url.value tf-outputs.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh "${{ steps.apply.outputs.service_url }}" "${{ needs.build.outputs.image_tag }}"
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed \`${GITHUB_SHA::7}\` to ${ENVIRONMENT}"
+            echo "- Service: ${{ steps.apply.outputs.service_url }}"
+            echo "- Dashboard: ${{ steps.apply.outputs.dashboard_url }}"
+          } >> "$GITHUB_STEP_SUMMARY"

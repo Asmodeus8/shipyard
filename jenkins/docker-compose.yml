@@ -1,0 +1,22 @@
+name: shipyard-jenkins
+
+services:
+  jenkins:
+    build: .
+    user: root
+    ports:
+      - "8081:8080"
+    environment:
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?set JENKINS_ADMIN_PASSWORD in jenkins/.env}
+      GIT_REPOSITORY_URL: ${GIT_REPOSITORY_URL:?set GIT_REPOSITORY_URL in jenkins/.env}
+      GITHUB_REPOSITORY: ${GITHUB_REPOSITORY:-}
+      AWS_REGION: ${AWS_REGION:-eu-west-1}
+      TF_STATE_BUCKET: ${TF_STATE_BUCKET:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+
+volumes:
+  jenkins_home:

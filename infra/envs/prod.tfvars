@@ -1,0 +1,10 @@
+environment        = "prod"
+region             = "eu-west-1"
+az_count           = 2
+single_nat_gateway = true
+task_cpu           = 256
+task_memory        = 512
+min_tasks          = 2
+max_tasks          = 6
+log_retention_days = 30
+alarm_emails       = []

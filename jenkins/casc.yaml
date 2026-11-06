@@ -1,0 +1,56 @@
+jenkins:
+  systemMessage: "Shipyard CI — configured as code (jenkins/casc.yaml)"
+  numExecutors: 2
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_ID:-admin}"
+          password: "${JENKINS_ADMIN_PASSWORD}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
+  globalNodeProperties:
+    - envVars:
+        env:
+          - key: AWS_REGION
+            value: "${AWS_REGION:-eu-west-1}"
+          - key: AWS_DEFAULT_REGION
+            value: "${AWS_REGION:-eu-west-1}"
+          - key: TF_STATE_BUCKET
+            value: "${TF_STATE_BUCKET:-}"
+          - key: REPOSITORY
+            value: "${GITHUB_REPOSITORY:-unknown}"
+
+credentials:
+  system:
+    domainCredentials:
+      - credentials:
+          - aws:
+              id: aws-shipyard
+              scope: GLOBAL
+              description: Deploy credentials (IAM user created by infra/bootstrap)
+              accessKey: "${AWS_ACCESS_KEY_ID:-unset}"
+              secretKey: "${AWS_SECRET_ACCESS_KEY:-unset}"
+
+unclassified:
+  location:
+    url: "http://localhost:8081/"
+
+jobs:
+  - script: |
+      multibranchPipelineJob('shipyard') {
+        displayName('Shipyard')
+        branchSources {
+          git {
+            id('shipyard')
+            remote('${GIT_REPOSITORY_URL}')
+          }
+        }
+        triggers {
+          periodicFolderTrigger { interval('5m') }
+        }
+        orphanedItemStrategy {
+          discardOldItems { numToKeep(10) }
+        }
+      }

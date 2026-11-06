@@ -1,0 +1,184 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 860" width="1280" height="860" font-family="-apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#334155"/></marker>
+    <marker id="ag" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#94a3b8"/></marker>
+    <marker id="at" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#0f766e"/></marker>
+    <style>
+      .t{font-size:13px;fill:#0f172a;font-weight:600}
+      .s{font-size:11.5px;fill:#475569}
+      .xs{font-size:10.5px;fill:#64748b}
+      .h{font-size:12px;font-weight:700;letter-spacing:.06em;fill:#334155}
+      .node{fill:#fff;stroke:#cbd5e1;stroke-width:1.2}
+      .flow{fill:none;stroke:#334155;stroke-width:1.6;marker-end:url(#a)}
+      .ctl{fill:none;stroke:#0f766e;stroke-width:1.6;stroke-dasharray:6 4;marker-end:url(#at)}
+      .obs{fill:none;stroke:#94a3b8;stroke-width:1.4;stroke-dasharray:3 4;marker-end:url(#ag)}
+      .pill{fill:#f1f5f9;stroke:#e2e8f0}
+    </style>
+  </defs>
+
+  <rect width="1280" height="860" rx="18" fill="#f8fafc"/>
+  <text x="40" y="46" font-size="20" font-weight="700" fill="#0f172a">Shipyard — production architecture</text>
+  <text x="40" y="68" class="s">ECS Fargate behind an Application Load Balancer, provisioned by Terraform, delivered by CI/CD, observed with CloudWatch</text>
+
+  <!-- Delivery -->
+  <rect x="30" y="96" width="300" height="734" rx="14" fill="#fff" stroke="#e2e8f0"/>
+  <text x="50" y="124" class="h">DELIVERY</text>
+
+  <rect x="54" y="140" width="252" height="52" rx="10" class="node"/>
+  <text x="72" y="162" class="t">Engineer</text>
+  <text x="72" y="179" class="s">git push / pull request</text>
+
+  <rect x="54" y="222" width="252" height="52" rx="10" class="node"/>
+  <text x="72" y="244" class="t">GitHub repository</text>
+  <text x="72" y="261" class="s">app · infra · pipelines · docs</text>
+  <path d="M180 192V218" class="flow"/>
+
+  <rect x="54" y="304" width="252" height="372" rx="12" fill="#f0fdfa" stroke="#99f6e4"/>
+  <text x="72" y="328" class="t">CI/CD pipeline</text>
+  <text x="72" y="345" class="s">GitHub Actions · Jenkins (same scripts)</text>
+  <path d="M180 274V300" class="flow"/>
+
+  <g class="s">
+    <rect x="70" y="362" width="220" height="34" rx="8" class="node"/><text x="84" y="383"><tspan font-weight="700" fill="#0f766e">1</tspan>  Unit tests · hadolint · image build</text>
+    <rect x="70" y="404" width="220" height="34" rx="8" class="node"/><text x="84" y="425"><tspan font-weight="700" fill="#0f766e">2</tspan>  Container smoke test</text>
+    <rect x="70" y="446" width="220" height="34" rx="8" class="node"/><text x="84" y="467"><tspan font-weight="700" fill="#0f766e">3</tspan>  terraform fmt · validate</text>
+    <rect x="70" y="488" width="220" height="34" rx="8" class="node"/><text x="84" y="509"><tspan font-weight="700" fill="#0f766e">4</tspan>  terraform plan  <tspan class="xs">(PRs)</tspan></text>
+    <rect x="70" y="530" width="220" height="34" rx="8" class="node"/><text x="84" y="551"><tspan font-weight="700" fill="#0f766e">5</tspan>  Push image :git-sha  <tspan class="xs">(main)</tspan></text>
+    <rect x="70" y="572" width="220" height="34" rx="8" class="node"/><text x="84" y="593"><tspan font-weight="700" fill="#0f766e">6</tspan>  terraform apply  <tspan class="xs">(main)</tspan></text>
+    <rect x="70" y="614" width="220" height="34" rx="8" class="node"/><text x="84" y="635"><tspan font-weight="700" fill="#0f766e">7</tspan>  Smoke test live URL  <tspan class="xs">(main)</tspan></text>
+  </g>
+
+  <rect x="54" y="700" width="252" height="110" rx="12" fill="#fff" stroke="#e2e8f0"/>
+  <text x="72" y="724" class="t">Credentials</text>
+  <text x="72" y="745" class="s">GitHub OIDC → short-lived IAM role</text>
+  <text x="72" y="763" class="s">deploy role: environment=production</text>
+  <text x="72" y="781" class="s">plan role: read-only + state lock</text>
+  <text x="72" y="799" class="s">no long-lived keys in GitHub</text>
+
+  <!-- Internet -->
+  <rect x="610" y="96" width="200" height="48" rx="24" fill="#fff" stroke="#cbd5e1"/>
+  <text x="710" y="117" text-anchor="middle" class="t">Users</text>
+  <text x="710" y="133" text-anchor="middle" class="xs">HTTP :80 (HTTPS :443 with ACM cert)</text>
+
+  <!-- AWS cloud -->
+  <rect x="360" y="166" width="890" height="664" rx="14" fill="#fff" stroke="#f59e0b" stroke-width="1.5"/>
+  <rect x="360" y="166" width="190" height="28" rx="14" fill="#f59e0b"/>
+  <text x="378" y="185" font-size="12" font-weight="700" fill="#fff">AWS · eu-west-1</text>
+
+  <!-- VPC -->
+  <rect x="384" y="214" width="610" height="400" rx="12" fill="#fcfffb" stroke="#65a30d" stroke-width="1.3"/>
+  <text x="402" y="238" class="h" fill="#3f6212">VPC 10.0.0.0/16</text>
+  <text x="402" y="254" class="xs">flow logs (REJECT) → CloudWatch</text>
+
+  <rect x="660" y="202" width="100" height="30" rx="8" fill="#fff" stroke="#65a30d"/>
+  <text x="710" y="222" text-anchor="middle" class="s" font-weight="600" fill="#3f6212">Internet GW</text>
+  <path d="M710 144V198" class="flow"/>
+
+  <!-- AZ columns -->
+  <rect x="404" y="266" width="285" height="332" rx="10" fill="none" stroke="#94a3b8" stroke-dasharray="5 4"/>
+  <text x="418" y="286" class="xs" font-weight="700">AZ a</text>
+  <rect x="701" y="266" width="277" height="332" rx="10" fill="none" stroke="#94a3b8" stroke-dasharray="5 4"/>
+  <text x="715" y="286" class="xs" font-weight="700">AZ b</text>
+
+  <rect x="416" y="294" width="261" height="126" rx="8" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="428" y="312" class="xs">public subnet 10.0.0.0/24</text>
+  <rect x="713" y="294" width="253" height="126" rx="8" fill="#f0fdf4" stroke="#bbf7d0"/>
+  <text x="725" y="312" class="xs">public subnet 10.0.1.0/24</text>
+
+  <rect x="500" y="322" width="380" height="46" rx="10" fill="#fff" stroke="#7c3aed" stroke-width="1.3"/>
+  <text x="690" y="342" text-anchor="middle" class="t">Application Load Balancer</text>
+  <text x="690" y="358" text-anchor="middle" class="xs">health check /healthz · drops invalid headers · SG: 80/443 in</text>
+  <path d="M710 232V318" class="flow"/>
+
+  <rect x="430" y="378" width="120" height="34" rx="8" fill="#fff" stroke="#65a30d"/>
+  <text x="490" y="399" text-anchor="middle" class="s" font-weight="600">NAT gateway</text>
+
+  <rect x="416" y="432" width="261" height="154" rx="8" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="428" y="450" class="xs">private subnet 10.0.100.0/24</text>
+  <rect x="713" y="432" width="253" height="154" rx="8" fill="#eff6ff" stroke="#bfdbfe"/>
+  <text x="725" y="450" class="xs">private subnet 10.0.101.0/24</text>
+
+  <g>
+    <rect x="446" y="466" width="200" height="94" rx="10" fill="#fff" stroke="#ea580c" stroke-width="1.3"/>
+    <text x="462" y="488" class="t">Fargate task</text>
+    <text x="462" y="506" class="s">shipyard-api :8080</text>
+    <text x="462" y="523" class="xs">0.25 vCPU · 512 MiB · read-only fs</text>
+    <text x="462" y="540" class="xs">SG: only from ALB · egress 443</text>
+    <rect x="740" y="466" width="200" height="94" rx="10" fill="#fff" stroke="#ea580c" stroke-width="1.3"/>
+    <text x="756" y="488" class="t">Fargate task</text>
+    <text x="756" y="506" class="s">shipyard-api :8080</text>
+    <text x="756" y="523" class="xs">0.25 vCPU · 512 MiB · read-only fs</text>
+    <text x="756" y="540" class="xs">SG: only from ALB · egress 443</text>
+  </g>
+  <path d="M640 368L560 462" class="flow"/>
+  <path d="M740 368L820 462" class="flow"/>
+  <path d="M500 466V416" class="obs"/>
+
+  <text x="689" y="582" text-anchor="middle" class="xs">ECS service: 2–6 tasks · CPU &amp; request-count autoscaling · rolling deploy with circuit-breaker rollback</text>
+
+  <!-- Shared services column -->
+  <text x="1028" y="238" class="h">PLATFORM</text>
+  <rect x="1024" y="250" width="206" height="58" rx="10" class="node"/>
+  <text x="1040" y="273" class="t">Amazon ECR</text>
+  <text x="1040" y="290" class="xs">immutable tags · scan on push</text>
+  <rect x="1024" y="320" width="206" height="58" rx="10" class="node"/>
+  <text x="1040" y="343" class="t">S3 Terraform state</text>
+  <text x="1040" y="360" class="xs">versioned · encrypted · native lock</text>
+  <rect x="1024" y="390" width="206" height="58" rx="10" class="node"/>
+  <text x="1040" y="413" class="t">IAM</text>
+  <text x="1040" y="430" class="xs">OIDC roles · task &amp; execution roles</text>
+  <rect x="1024" y="460" width="206" height="58" rx="10" class="node"/>
+  <text x="1040" y="483" class="t">ECS control plane</text>
+  <text x="1040" y="500" class="xs">cluster · service · task definition</text>
+
+
+  <!-- CI control-plane arrows -->
+  <path d="M306 590H340V624H1006V281H1020" class="ctl"/>
+  <path d="M1006 351H1020" class="ctl"/>
+  <path d="M1006 491H1020" class="ctl"/>
+  <text x="560" y="640" class="xs" fill="#0f766e">push image · read/write state · update service</text>
+
+  <!-- Observability -->
+  <g transform="translate(0 12)">
+  <rect x="384" y="636" width="846" height="166" rx="12" fill="#fafaf9" stroke="#e7e5e4"/>
+  <text x="402" y="660" class="h">OBSERVABILITY · CLOUDWATCH</text>
+
+  <rect x="402" y="676" width="190" height="112" rx="10" class="node"/>
+  <text x="418" y="698" class="t">Logs</text>
+  <text x="418" y="716" class="s">/ecs/shipyard-prod</text>
+  <text x="418" y="733" class="xs">structured JSON per request</text>
+  <text x="418" y="749" class="xs">/vpc/…/flow-logs</text>
+  <text x="418" y="765" class="xs">Logs Insights saved query</text>
+
+  <rect x="612" y="676" width="190" height="112" rx="10" class="node"/>
+  <text x="628" y="698" class="t">Metrics</text>
+  <text x="628" y="716" class="s">ALB · ECS · Container Insights</text>
+  <text x="628" y="733" class="xs">metric filters: 5xx, fatal</text>
+  <text x="628" y="749" class="xs">p50 / p95 / p99 latency</text>
+
+  <rect x="822" y="676" width="190" height="112" rx="10" class="node"/>
+  <text x="838" y="698" class="t">Alarms (7)</text>
+  <text x="838" y="716" class="xs">no healthy hosts · unhealthy hosts</text>
+  <text x="838" y="732" class="xs">target 5xx · p95 latency</text>
+  <text x="838" y="748" class="xs">app errors · CPU · memory</text>
+  <text x="838" y="764" class="xs">+ dashboard</text>
+
+  <rect x="1032" y="676" width="180" height="112" rx="10" class="node"/>
+  <text x="1048" y="698" class="t">SNS → email</text>
+  <text x="1048" y="716" class="xs">alarm + OK notifications</text>
+
+  <path d="M592 732H608" class="flow"/>
+  <path d="M802 732H818" class="flow"/>
+  <path d="M1012 732H1028" class="flow"/>
+  <path d="M546 560C546 610 497 640 497 672" class="obs"/>
+  <path d="M840 560C840 620 707 630 707 672" class="obs"/>
+
+  </g>
+
+  <!-- Legend -->
+  <g transform="translate(1000 112)">
+    <path d="M0 0H26" class="flow"/><text x="34" y="4" class="xs">request path</text>
+    <path d="M110 0H136" class="ctl"/><text x="144" y="4" class="xs">CI/CD</text>
+    <path d="M0 22H26" class="obs"/><text x="34" y="26" class="xs">logs / pulls / egress</text>
+  </g>
+</svg>

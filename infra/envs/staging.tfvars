@@ -1,0 +1,11 @@
+environment        = "staging"
+region             = "eu-west-1"
+vpc_cidr           = "10.1.0.0/16"
+az_count           = 2
+single_nat_gateway = true
+task_cpu           = 256
+task_memory        = 512
+min_tasks          = 1
+max_tasks          = 2
+log_retention_days = 7
+alarm_emails       = []

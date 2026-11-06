@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>Shipyard Console</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/console.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="/">
+        <img src="/favicon.svg" alt="" width="26" height="26">
+        <span>Shipyard</span>
+        <span class="env" id="env">—</span>
+      </a>
+      <div class="topbar-actions">
+        <span class="status" id="status" data-state="pending"><i></i><span>Connecting</span></span>
+        <button class="btn" id="toggle" type="button" aria-pressed="true">
+          <svg viewBox="0 0 16 16" aria-hidden="true"><path class="i-pause" d="M5 3h2v10H5zM9 3h2v10H9z"/><path class="i-play" d="M5 3l8 5-8 5z"/></svg>
+          <span>Live</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="rollout" id="rollout" hidden>
+      <span class="rollout-dot"></span>
+      <span id="rollout-text"></span>
+    </div>
+
+    <section class="stats" aria-label="Summary">
+      <article class="stat">
+        <h2>Release</h2>
+        <p class="stat-value mono"><a id="version" target="_blank" rel="noopener">—</a></p>
+        <p class="stat-sub" id="started">—</p>
+      </article>
+      <article class="stat">
+        <h2>Region</h2>
+        <p class="stat-value" id="region">—</p>
+        <p class="stat-sub" id="platform">—</p>
+      </article>
+      <article class="stat">
+        <h2>Tasks serving</h2>
+        <p class="stat-value" id="tasks">0</p>
+        <p class="stat-sub" id="azs">—</p>
+      </article>
+      <article class="stat">
+        <h2>Success rate</h2>
+        <p class="stat-value" id="success">—</p>
+        <p class="stat-sub" id="probes">0 probes</p>
+      </article>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <header class="card-head">
+          <h2>Latency</h2>
+          <dl class="pills">
+            <div><dt>p50</dt><dd id="p50">—</dd></div>
+            <div><dt>p95</dt><dd id="p95">—</dd></div>
+            <div><dt>p99</dt><dd id="p99">—</dd></div>
+          </dl>
+        </header>
+        <div class="chart" id="chart">
+          <svg id="chart-svg" preserveAspectRatio="none" role="img" aria-label="Round-trip latency over the last 60 probes"></svg>
+          <div class="chart-tip" id="chart-tip" hidden></div>
+        </div>
+        <div class="chart-axis"><span>-90s</span><span>now</span></div>
+      </article>
+
+      <article class="card">
+        <header class="card-head">
+          <h2>Load distribution</h2>
+          <span class="muted" id="dist-total">—</span>
+        </header>
+        <ul class="dist" id="dist"></ul>
+        <p class="empty" id="dist-empty">Waiting for responses</p>
+      </article>
+    </section>
+
+    <section class="card">
+      <header class="card-head">
+        <h2>Requests</h2>
+        <span class="muted mono">GET /api/info</span>
+      </header>
+      <div class="table-wrap">
+        <table class="log">
+          <thead>
+            <tr><th>Time</th><th>Task</th><th class="hide-sm">Zone</th><th>Status</th><th class="num">Latency</th><th class="hide-sm">Release</th></tr>
+          </thead>
+          <tbody id="log"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer class="wrap footer">
+    <nav class="endpoints" aria-label="Endpoints">
+      <a href="/healthz" target="_blank"><span class="verb">GET</span>/healthz</a>
+      <a href="/api/info" target="_blank"><span class="verb">GET</span>/api/info</a>
+      <a href="/api/version" target="_blank"><span class="verb">GET</span>/api/version</a>
+    </nav>
+    <span class="muted">ECS Fargate · ALB · CloudWatch</span>
+  </footer>
+
+  <template id="row-tpl">
+    <tr>
+      <td class="mono muted" data-k="time"></td>
+      <td><span class="task"><i></i><span class="mono" data-k="task"></span></span></td>
+      <td class="mono muted hide-sm" data-k="az"></td>
+      <td><span class="code" data-k="status"></span></td>
+      <td class="mono num" data-k="ms"></td>
+      <td class="mono muted hide-sm" data-k="version"></td>
+    </tr>
+  </template>
+</body>
+</html>
