@@ -9,7 +9,9 @@ A containerised web service deployed to **AWS ECS Fargate** behind an **Applicat
 
 A push to `main` runs tests, builds and scans an image, pushes it to ECR, applies Terraform, rolls the ECS service, and smoke-tests the live URL. You do nothing by hand after the one-time bootstrap.
 
-![Shipyard console](docs/console.png)
+**Live:** http://shipyard-prod-2113359311.eu-west-1.elb.amazonaws.com (while the review stack is running)
+
+![Shipyard console running on ECS Fargate](docs/console.png)
 
 The service serves a small operations console. It probes the load balancer every 1.5 s and shows:
 - which release is live
@@ -219,7 +221,7 @@ Pipeline guarantees:
 | **Private subnets + single NAT** | Tasks are not reachable from the internet. One NAT saves about $35/month; `single_nat_gateway = false` gives one per AZ. |
 | **S3 native state locking** (`use_lockfile`) | Terraform ≥ 1.10 locks in S3 directly, so no DynamoDB table is needed. |
 | **Bootstrap stack kept separate** | The state bucket can't store its own state, and ECR/IAM outlive any one environment. Environments are `tfvars` files plus a state key, with no copy-pasted roots. |
-| **OIDC, two roles** | No long-lived keys in GitHub. PRs can only plan (read-only). Only the `production` environment can assume the deploy role, which allows only the services the stack uses and only IAM roles prefixed `shipyard-`. |
+| **OIDC, two roles** (classic and immutable `sub` claims accepted) | No long-lived keys in GitHub. PRs can only plan (read-only). Only the `production` environment can assume the deploy role, which allows only the services the stack uses and only IAM roles prefixed `shipyard-`. |
 | **Shared shell scripts** for build/deploy/smoke | GitHub Actions and Jenkins run identical logic, so the CI system is swappable. |
 | **Zero-dependency Node service** | No supply-chain surface to audit. Tests use the built-in `node:test`, and the image is just Alpine Node plus the app. |
 | **Tests run inside the image build** | The image that ships is built from the same layers that passed the tests. |
