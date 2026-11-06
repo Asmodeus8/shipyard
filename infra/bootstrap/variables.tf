@@ -29,3 +29,9 @@ variable "create_jenkins_user" {
   type        = bool
   default     = false
 }
+
+variable "github_subject_prefixes" {
+  description = "Extra OIDC subject prefixes, e.g. the immutable form repo:owner@id/name@id"
+  type        = list(string)
+  default     = []
+}

@@ -24,7 +24,7 @@ data "aws_caller_identity" "current" {}
 locals {
   account_id   = data.aws_caller_identity.current.account_id
   state_bucket = "${var.project}-tfstate-${local.account_id}-${var.region}"
-  repo_subject = "repo:${var.github_repository}"
+  subjects     = distinct(concat(["repo:${var.github_repository}"], var.github_subject_prefixes))
 }
 
 resource "aws_s3_bucket" "state" {
@@ -106,7 +106,7 @@ data "aws_iam_policy_document" "trust_deploy" {
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${local.repo_subject}:environment:production"]
+      values   = [for p in local.subjects : "${p}:environment:production"]
     }
   }
 }
@@ -126,7 +126,7 @@ data "aws_iam_policy_document" "trust_plan" {
     condition {
       test     = "StringLike"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["${local.repo_subject}:pull_request", "${local.repo_subject}:ref:refs/heads/*"]
+      values   = flatten([for p in local.subjects : ["${p}:pull_request", "${p}:ref:refs/heads/*"]])
     }
   }
 }
