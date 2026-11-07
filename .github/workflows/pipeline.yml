@@ -15,6 +15,8 @@ concurrency:
 
 env:
   TF_VERSION: 1.13.5
+  TRIVY_VERSION: 0.76.1
+  CHECKOV_VERSION: 3.4.3
   ENVIRONMENT: prod
   AWS_REGION: ${{ vars.AWS_REGION }}
   TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
@@ -44,6 +46,12 @@ jobs:
           docker build --target test -t shipyard-api:test app
           docker build --build-arg APP_VERSION=${{ github.sha }} -t shipyard-api:ci app
 
+      - name: Scan image for vulnerabilities
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            "aquasec/trivy:${TRIVY_VERSION}" image --quiet --scanners vuln \
+            --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 shipyard-api:ci
+
       - name: Container smoke test
         run: |
           docker run -d --name api -p 8080:8080 --read-only shipyard-api:ci
@@ -69,6 +77,9 @@ jobs:
             terraform -chdir=$dir init -backend=false -input=false >/dev/null
             terraform -chdir=$dir validate
           done
+
+      - name: Security checks
+        run: docker run --rm -v "$PWD:/repo" -w /repo "bridgecrew/checkov:${CHECKOV_VERSION}" --config-file .checkov.yaml -d infra
 
   plan:
     name: Terraform plan

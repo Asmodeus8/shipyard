@@ -11,6 +11,7 @@ resource "aws_security_group" "alb" {
 
 resource "aws_vpc_security_group_ingress_rule" "http" {
   security_group_id = aws_security_group.alb.id
+  description       = local.https ? "HTTP from the internet, redirected to HTTPS" : "HTTP from the internet"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "tcp"
   from_port         = 80
@@ -20,6 +21,7 @@ resource "aws_vpc_security_group_ingress_rule" "http" {
 resource "aws_vpc_security_group_ingress_rule" "https" {
   count             = local.https ? 1 : 0
   security_group_id = aws_security_group.alb.id
+  description       = "HTTPS from the internet"
   cidr_ipv4         = "0.0.0.0/0"
   ip_protocol       = "tcp"
   from_port         = 443
@@ -28,6 +30,7 @@ resource "aws_vpc_security_group_ingress_rule" "https" {
 
 resource "aws_vpc_security_group_egress_rule" "to_targets" {
   security_group_id = aws_security_group.alb.id
+  description       = "Forward to tasks inside the VPC"
   cidr_ipv4         = var.vpc_cidr
   ip_protocol       = "tcp"
   from_port         = var.target_port

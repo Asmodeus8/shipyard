@@ -90,9 +90,10 @@ flowchart LR
 │   ├── stack/              root module composing the modules
 │   └── envs/               prod.tfvars · staging.tfvars
 ├── scripts/                build-push · terraform · smoke-test · bootstrap
-├── .github/workflows/      pipeline.yml · destroy.yml
+├── .github/                pipeline · rollback · destroy workflows, Dependabot
 ├── Jenkinsfile             same stages for Jenkins
 ├── jenkins/                Jenkins controller as code (JCasC, plugins, compose)
+├── .checkov.yaml           IaC scan policy and accepted risks
 ├── docker-compose.yml      local stack: 3 replicas behind nginx
 └── docs/                   architecture diagram, screenshots
 ```
@@ -150,7 +151,15 @@ The pipeline builds, pushes, applies and smoke-tests. The job summary links to t
 
 To receive alarm emails, add addresses to `alarm_emails` in `infra/envs/prod.tfvars` and confirm the SNS subscription email.
 
-### 3. Tear down
+### 3. Roll back
+
+Run the **rollback** workflow and enter the commit SHA of an earlier release (short or full). It checks that the commit exists and that its image is in ECR, redeploys that image through the same Terraform apply, and smoke-tests that the old version is serving. The next push to `main` rolls forward again.
+
+```bash
+gh workflow run rollback -f release=2399cd5
+```
+
+### 4. Tear down
 
 Run the **destroy** workflow in the Actions tab and type the environment name to confirm. Then remove the bootstrap stack with `terraform -chdir=infra/bootstrap destroy`.
 
@@ -159,9 +168,9 @@ Run the **destroy** workflow in the Actions tab and type the environment name to
 The `Jenkinsfile` runs the same stages and calls the same scripts. The `jenkins/` folder holds a controller defined entirely as code: plugins, the admin user, the AWS credential, and the multibranch job, all seeded by JCasC.
 
 ```bash
-terraform -chdir=infra/bootstrap apply -var github_repository=<owner>/<repo> -var create_jenkins_user=true
-aws iam create-access-key --user-name shipyard-jenkins     # put the key in jenkins/.env
-cp jenkins/.env.example jenkins/.env                       # fill in values
+terraform -chdir=infra/bootstrap plan -out=tfplan -var github_repository=<owner>/<repo> -var create_jenkins_user=true
+cp -n jenkins/.env.example jenkins/.env                    # set JENKINS_ADMIN_PASSWORD and the repo URL
+./scripts/jenkins-credentials.sh                           # applies the plan, writes the key to jenkins/.env
 docker compose -f jenkins/docker-compose.yml up -d --build # http://localhost:8081
 ```
 
@@ -175,11 +184,13 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 
 | Job | Trigger | What it does |
 |---|---|---|
-| **Build & test** | every push and PR | `npm test`, hadolint, Docker build of the `test` stage (tests run inside the image build), runtime image build, container run + smoke test |
-| **Terraform checks** | every push and PR | `fmt -check`, `validate` for the bootstrap and the stack |
+| **Build & test** | every push and PR | `npm test`, hadolint, Docker build of the `test` stage (tests run inside the image build), runtime image build, **Trivy** scan (fails on fixable HIGH/CRITICAL CVEs), container run + smoke test |
+| **Terraform checks** | every push and PR | `fmt -check`, `validate` for the bootstrap and the stack, **Checkov** policy scan |
 | **Terraform plan** | PRs | Plan against real state using the read-only role; the summary and the full plan appear in the job summary |
 | **Push image** | `main` | Build and push `:<git-sha>`; skipped if the tag exists (tags are immutable) |
 | **Deploy to ECS** | `main` | `terraform apply` (waits for ECS steady state), smoke test until 5 consecutive responses serve the new SHA, then summary |
+
+[`rollback.yml`](.github/workflows/rollback.yml) redeploys an earlier release on demand, and [`destroy.yml`](.github/workflows/destroy.yml) tears an environment down. Dependabot opens weekly grouped updates for Actions, base images, Terraform providers and npm.
 
 Pipeline guarantees:
 - **Concurrency:** deploys are serialised (`deploy-production`, never cancelled midway), and superseded PR runs are cancelled.
@@ -207,6 +218,10 @@ Pipeline guarantees:
 | `cpu-high` / `memory-high` | > 85 % for 5 min, which means autoscaling is already at its limit |
 
 **Dashboard.** Requests and errors, p50/p95/p99 latency, CPU/memory, healthy targets and running tasks, app errors from logs, alarm status, and a live table of recent error logs. Its URL is a Terraform output.
+
+![CloudWatch dashboard: requests, latency, CPU and memory, healthy targets](docs/cloudwatch.png)
+
+<sub>Rendered from the live `shipyard-prod` dashboard during a five-minute burst of about 3,000 requests (the orange line is deliberate 404s). p50 and p95 stay in the low milliseconds, both tasks stay healthy, and all seven alarms are `OK`.</sub>
 
 ---
 
@@ -236,8 +251,25 @@ Pipeline guarantees:
 - The container runs as a non-root user with a read-only root filesystem.
 - The app sends a strict CSP, `X-Frame-Options: DENY`, `nosniff` and `no-referrer`. The console loads no third-party scripts, styles or fonts.
 - The ALB drops invalid header fields. With a certificate, HTTP redirects to HTTPS on the TLS 1.3 policy.
-- ECR scans every image on push.
-- The state bucket is versioned, encrypted, blocks public access, and denies non-TLS requests.
+- ECR scans every image on push, and CI blocks on Trivy findings before the image is pushed. The runtime image ships without npm, yarn or corepack, which removes every CVE the scan found in the base image.
+- Checkov scans all Terraform on every change (187 checks pass). Checks that conflict with a deliberate choice are skipped in [`.checkov.yaml`](.checkov.yaml), with the reasons below.
+- The state bucket is versioned, encrypted, blocks public access, denies non-TLS requests, and expires old state versions after 90 days.
+
+<details>
+<summary>Accepted Checkov findings</summary>
+
+| Check | Why it is accepted |
+|---|---|
+| `CKV_AWS_2`, `CKV_AWS_260`, `CKV_AWS_378` | No domain is available, so the ALB listens on HTTP. Setting `certificate_arn` adds HTTPS and turns port 80 into a redirect. Targets are in private subnets, so ALB → task traffic stays on HTTP inside the VPC. |
+| `CKV2_AWS_28` | WAF costs more than the rest of the stack. It is listed under improvements. |
+| `CKV_AWS_91` | Request logs come from the app's structured JSON logs. ALB access logs would need a separate bucket for no new information. |
+| `CKV_AWS_150` | Deletion protection would block the destroy workflow, which reviewers need. |
+| `CKV_AWS_136`, `CKV_AWS_145`, `CKV_AWS_158`, `CKV_AWS_26` | Data is encrypted at rest with AWS-owned keys. Customer-managed KMS keys add cost and key policy work, and SNS with an AWS-managed key would stop CloudWatch from delivering alarms. |
+| `CKV_AWS_338` | Logs are kept for 30 days to keep cost low. Retention is one variable. |
+| `CKV_AWS_144`, `CKV_AWS_18`, `CKV2_AWS_62` | Cross-region replication, access logging and event notifications on the state bucket are overkill for one environment. Versioning covers recovery. |
+| `CKV_AWS_394` | The network module takes the first `az_count` zones in name order, so a zone added to the region later does not move any subnet. |
+
+</details>
 
 ---
 
@@ -257,7 +289,7 @@ Pipeline guarantees:
 - **Promotion:** deploy to `staging` first and promote the same SHA to `prod` after approval.
 - **Bootstrap state:** the bootstrap stack keeps local state. Migrate it into the bucket after the first apply, or manage it from an org-level account.
 - **Least privilege:** the deploy policy is scoped by service, region and name prefix. It could be tightened further to resource ARNs and tag conditions.
-- **Scanning in CI:** add Trivy/Grype and tfsec/Checkov as blocking checks. ECR scanning currently reports but doesn't block.
+- **Supply chain:** sign images with cosign and verify the signature at deploy time. Pin the scanner images by digest.
 - **Tracing:** OpenTelemetry → AWS X-Ray for per-request traces.
 - **Cost:** VPC endpoints for ECR/Logs/S3 can replace NAT traffic; Fargate Spot for non-prod.
 

@@ -1,0 +1,33 @@
+version: 2
+
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: docker
+    directories:
+      - /app
+      - /jenkins
+    schedule:
+      interval: weekly
+
+  - package-ecosystem: terraform
+    directories:
+      - /infra/bootstrap
+      - /infra/stack
+      - /infra/modules/*
+    schedule:
+      interval: weekly
+    groups:
+      terraform:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /app
+    schedule:
+      interval: weekly
