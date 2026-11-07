@@ -1,4 +1,4 @@
-FROM jenkins/jenkins:2.516.3-lts-jdk21
+FROM jenkins/jenkins:2.580.2-lts-jdk21
 
 ARG TERRAFORM_VERSION=1.13.5
 USER root
