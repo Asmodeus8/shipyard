@@ -1,0 +1,76 @@
+name: rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Commit SHA (short or full) of the release to roll back to
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  rollback:
+    runs-on: ubuntu-24.04
+    environment:
+      name: production
+      url: ${{ steps.apply.outputs.service_url }}
+    env:
+      ENVIRONMENT: prod
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      TF_STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: 1.13.5
+          terraform_wrapper: false
+
+      - name: Resolve release
+        id: release
+        env:
+          RELEASE: ${{ inputs.release }}
+        run: |
+          [[ "$RELEASE" =~ ^[0-9a-f]{7,40}$ ]] || { echo "::error::'$RELEASE' is not a commit SHA"; exit 1; }
+          sha="$(git rev-parse --verify --quiet "${RELEASE}^{commit}")" || { echo "::error::Commit $RELEASE not found"; exit 1; }
+          aws ecr describe-images --repository-name shipyard-api --image-ids imageTag="$sha" >/dev/null 2>&1 ||
+            { echo "::error::No image for $sha in ECR; only commits deployed from main can be restored"; exit 1; }
+          current="$(./scripts/terraform.sh output "$ENVIRONMENT" | jq -r '.image.value // empty' | sed 's/.*://')"
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "Rolling back from ${current:-unknown} to $sha"
+
+      - name: Deploy release
+        id: apply
+        run: |
+          ./scripts/terraform.sh apply "$ENVIRONMENT" "${{ steps.release.outputs.sha }}"
+          echo "service_url=$(jq -r .service_url.value tf-outputs.json)" >> "$GITHUB_OUTPUT"
+
+      - name: Smoke test
+        run: ./scripts/smoke-test.sh "${{ steps.apply.outputs.service_url }}" "${{ steps.release.outputs.sha }}"
+
+      - name: Summary
+        env:
+          FROM: ${{ steps.release.outputs.current }}
+          TO: ${{ steps.release.outputs.sha }}
+        run: |
+          {
+            echo "### Rolled back ${ENVIRONMENT} to \`${TO::7}\`"
+            echo "- Previous release: \`${FROM::7}\`"
+            echo "- Service: ${{ steps.apply.outputs.service_url }}"
+            echo "- The next push to main deploys the latest commit again"
+          } >> "$GITHUB_STEP_SUMMARY"

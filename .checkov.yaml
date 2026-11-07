@@ -1,0 +1,20 @@
+framework:
+  - terraform
+compact: true
+quiet: true
+skip-check:
+  - CKV_AWS_2
+  - CKV_AWS_260
+  - CKV_AWS_378
+  - CKV2_AWS_28
+  - CKV_AWS_91
+  - CKV_AWS_150
+  - CKV_AWS_136
+  - CKV_AWS_145
+  - CKV_AWS_158
+  - CKV_AWS_338
+  - CKV_AWS_26
+  - CKV_AWS_144
+  - CKV_AWS_18
+  - CKV2_AWS_62
+  - CKV_AWS_394

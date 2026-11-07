@@ -18,6 +18,7 @@ ENV NODE_ENV=production \
     APP_VERSION=${APP_VERSION} \
     PORT=8080
 WORKDIR /app
+RUN rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn* /usr/local/bin/yarn /usr/local/bin/yarnpkg
 COPY --from=base --chown=1000:1000 /app/node_modules ./node_modules
 COPY --chown=1000:1000 package.json ./
 COPY --chown=1000:1000 src ./src

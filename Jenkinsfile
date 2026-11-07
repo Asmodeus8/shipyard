@@ -13,6 +13,8 @@ pipeline {
     ECR_REPOSITORY = 'shipyard-api'
     IMAGE_TAG      = "${env.GIT_COMMIT}"
     CANDIDATE      = "shipyard-ci-${env.BUILD_NUMBER}"
+    TRIVY          = 'aquasec/trivy:0.76.1'
+    CHECKOV        = 'bridgecrew/checkov:3.4.3'
   }
 
   stages {
@@ -34,12 +36,29 @@ pipeline {
             '''
           }
         }
+        stage('IaC scan') {
+          steps {
+            sh '''
+              tar -c .checkov.yaml infra | docker run -i --rm --entrypoint sh ${CHECKOV} \
+                -c 'mkdir /repo && cd /repo && tar -x && checkov --config-file .checkov.yaml -d infra'
+            '''
+          }
+        }
       }
     }
 
     stage('Build image') {
       steps {
         sh 'docker build --build-arg APP_VERSION=${IMAGE_TAG} -t ${ECR_REPOSITORY}:${IMAGE_TAG} app'
+      }
+    }
+
+    stage('Image scan') {
+      steps {
+        sh '''
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock ${TRIVY} image --quiet \
+            --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 ${ECR_REPOSITORY}:${IMAGE_TAG}
+        '''
       }
     }
 
