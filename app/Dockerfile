@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-alpine AS base
+FROM node:25-alpine AS base
 WORKDIR /app
 ENV NODE_ENV=production
 COPY package.json package-lock.json ./
@@ -12,7 +12,7 @@ COPY public ./public
 COPY test ./test
 RUN npm test
 
-FROM node:22-alpine AS runtime
+FROM node:25-alpine AS runtime
 ARG APP_VERSION=dev
 ENV NODE_ENV=production \
     APP_VERSION=${APP_VERSION} \
