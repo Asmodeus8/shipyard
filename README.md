@@ -177,7 +177,7 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 |---|---|---|
 | **Build & test** | every push and PR | `npm test`, hadolint, Docker build of the `test` stage (tests run inside the image build), runtime image build, container run + smoke test |
 | **Terraform checks** | every push and PR | `fmt -check`, `validate` for the bootstrap and the stack |
-| **Terraform plan** | PRs | Plan against real state using the read-only role; result in the job summary |
+| **Terraform plan** | PRs | Plan against real state using the read-only role; the summary and the full plan appear in the job summary |
 | **Push image** | `main` | Build and push `:<git-sha>`; skipped if the tag exists (tags are immutable) |
 | **Deploy to ECS** | `main` | `terraform apply` (waits for ECS steady state), smoke test until 5 consecutive responses serve the new SHA, then summary |
 
