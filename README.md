@@ -176,6 +176,10 @@ docker compose -f jenkins/docker-compose.yml up -d --build # http://localhost:80
 
 Jenkins scans the repository every 5 minutes. It runs verification on every branch, and push/deploy/smoke stages only on `main`.
 
+![Jenkins stage view: a green run of all eleven stages on main](docs/jenkins.png)
+
+<sub>Build #2 of `main` on the local controller, using the `shipyard-jenkins` IAM user. GitHub Actions had already shipped the same commit, so Jenkins found the image in ECR and Terraform reported no changes. Both pipelines converge on the same state.</sub>
+
 ---
 
 ## CI/CD pipeline
