@@ -168,9 +168,9 @@ Run the **destroy** workflow in the Actions tab and type the environment name to
 The `Jenkinsfile` runs the same stages and calls the same scripts. The `jenkins/` folder holds a controller defined entirely as code: plugins, the admin user, the AWS credential, and the multibranch job, all seeded by JCasC.
 
 ```bash
-terraform -chdir=infra/bootstrap apply -var github_repository=<owner>/<repo> -var create_jenkins_user=true
-aws iam create-access-key --user-name shipyard-jenkins     # put the key in jenkins/.env
-cp jenkins/.env.example jenkins/.env                       # fill in values
+terraform -chdir=infra/bootstrap plan -out=tfplan -var github_repository=<owner>/<repo> -var create_jenkins_user=true
+cp -n jenkins/.env.example jenkins/.env                    # set JENKINS_ADMIN_PASSWORD and the repo URL
+./scripts/jenkins-credentials.sh                           # applies the plan, writes the key to jenkins/.env
 docker compose -f jenkins/docker-compose.yml up -d --build # http://localhost:8081
 ```
 
