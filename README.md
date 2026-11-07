@@ -219,6 +219,10 @@ Pipeline guarantees:
 
 **Dashboard.** Requests and errors, p50/p95/p99 latency, CPU/memory, healthy targets and running tasks, app errors from logs, alarm status, and a live table of recent error logs. Its URL is a Terraform output.
 
+![CloudWatch dashboard: requests, latency, CPU and memory, healthy targets](docs/cloudwatch.png)
+
+<sub>Rendered from the live `shipyard-prod` dashboard during a five-minute burst of about 3,000 requests (the orange line is deliberate 404s). p50 and p95 stay in the low milliseconds, both tasks stay healthy, and all seven alarms are `OK`.</sub>
+
 ---
 
 ## Design decisions
