@@ -110,6 +110,12 @@ jobs:
             echo '```'
             grep -E '^(Plan:|No changes)' plan.txt || tail -n 5 plan.txt
             echo '```'
+            echo '<details><summary>Full plan</summary>'
+            echo
+            echo '```'
+            sed -n '/Terraform will perform/,$p' plan.txt
+            echo '```'
+            echo '</details>'
           } >> "$GITHUB_STEP_SUMMARY"
 
   build:
