@@ -30,7 +30,7 @@ That makes load balancing, multi-AZ placement and zero-downtime rollouts visible
 | A full Jenkins run (all eleven stages, deploy included) | [Jenkins pipeline](#jenkins) |
 | A full GitHub Actions run | [Actions tab](https://github.com/Asmodeus8/shipyard/actions/workflows/pipeline.yml) |
 | Infrastructure as code | [`infra/`](infra) - five modules, one root stack, a bootstrap stack |
-| Monitoring | [CloudWatch dashboard and alarms](#monitoring-and-logging) |
+| Monitoring and alarm drill | [CloudWatch dashboard, alarms and a tested alarm path](#monitoring-and-logging) · [runbook](docs/runbook.md) |
 | Rollback and teardown | [`rollback.yml`](.github/workflows/rollback.yml) · [`destroy.yml`](.github/workflows/destroy.yml) |
 
 ---
@@ -107,7 +107,7 @@ flowchart LR
 ├── jenkins/                Jenkins controller as code (JCasC, plugins, compose)
 ├── .checkov.yaml           IaC scan policy and accepted risks
 ├── docker-compose.yml      local stack: 3 replicas behind nginx
-└── docs/                   architecture diagram, screenshots
+└── docs/                   architecture diagram, screenshots, runbook
 ```
 
 ---
@@ -227,7 +227,7 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 Pipeline guarantees:
 - **Concurrency:** deploys are serialised (`deploy-production`, never cancelled midway), and superseded PR runs are cancelled.
 - **Repeatability:** the image tag is the commit SHA, and the infrastructure is declared in Terraform. Re-running a deploy for the same commit is a no-op.
-- **Zero downtime (measured):** probing the live URL once per second during a deploy gave 367 requests and 0 errors. Traffic moved from the old release, through a mixed phase, to the new one.
+- **Zero downtime (measured twice):** probing the live URL once per second during a deploy gave 367 requests and 0 errors on 7 Nov, and 148 requests and 0 errors on 11 Nov (76 from the old release, 72 from the new one). Traffic moved from the old release, through a mixed phase, to the new one.
 - **Safety:** ECS rolls the deployment back on its own when new tasks fail health checks, and the pipeline then fails because steady state is never reached.
 
 ---
@@ -254,6 +254,17 @@ Pipeline guarantees:
 ![CloudWatch dashboard: requests, latency, CPU and memory, healthy targets](docs/cloudwatch.png)
 
 <sub>Rendered from the live `shipyard-prod` dashboard during a five-minute burst of about 3,000 requests (the orange line is deliberate 404s). p50 and p95 stay in the low milliseconds, both tasks stay healthy, and all seven alarms are `OK`.</sub>
+
+**Alarm drill.** On 11 Nov, `aws cloudwatch set-alarm-state` forced `alb-target-5xx` into ALARM. CloudWatch notified the SNS topic, the alarm returned to OK at its next evaluation seven seconds later, and the OK notification was delivered too:
+
+```text
+10:23:17Z  StateUpdate  Alarm updated from OK to ALARM
+10:23:17Z  Action       Successfully executed action arn:aws:sns:eu-west-1:…:shipyard-prod-alerts
+10:23:24Z  StateUpdate  Alarm updated from ALARM to OK
+10:23:24Z  Action       Successfully executed action arn:aws:sns:eu-west-1:…:shipyard-prod-alerts
+```
+
+**Runbook.** [`docs/runbook.md`](docs/runbook.md) covers the first five minutes of an incident, what each alarm means and how to fix it, rollback, rotating the Jenkins key, and scaling.
 
 ---
 
