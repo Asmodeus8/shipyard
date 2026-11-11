@@ -268,6 +268,10 @@ Pipeline guarantees:
 10:23:24Z  Action       Successfully executed action arn:aws:sns:eu-west-1:…:shipyard-prod-alerts
 ```
 
+![Alarm timeline for alb-target-5xx: OK all morning, with the two drills at 10:23 and 10:43 showing as short ALARM marks](docs/alarm-drill.png)
+
+<sub>The `alb-target-5xx` timeline in CloudWatch. The red mark at 10:43 is the second drill, which also delivered the ALARM and OK emails to the subscribed address. The alarm stayed OK the rest of the time, with no real 5xx errors.</sub>
+
 **Runbook.** [`docs/runbook.md`](docs/runbook.md) covers the first five minutes of an incident, what each alarm means and how to fix it, rollback, rotating the Jenkins key, and scaling.
 
 ---

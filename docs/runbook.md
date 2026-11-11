@@ -22,6 +22,8 @@ All alarms publish to the SNS topic `shipyard-prod-alerts` on ALARM and on OK. A
 | `latency-p95` | p95 > 1 s for 3 min | Saturation, or a slow path | Saved query `shipyard-prod/slow-requests`; CPU and running tasks | Autoscaling adds tasks. Raise `max_tasks` if it is already at the limit |
 | `cpu-high` / `memory-high` | > 85 % for 5 min | Autoscaling is at its maximum | Running task count vs `max_tasks` | Raise `max_tasks` or `task_cpu`/`task_memory` in `prod.tfvars`, then deploy |
 
+**`TargetTracking-…-AlarmLow` alarms always show "In alarm" at low traffic.** Application Auto Scaling creates and owns them (for CPU and `RequestCountPerTarget`), and they only drive scale-in, which stops at `min_tasks`. They send no notifications. Ignore them.
+
 ECS also has a deployment circuit breaker. If new tasks fail their health checks during a rollout, ECS restores the previous task definition on its own and the pipeline fails at "wait for steady state". If that happens, the release is already rolled back: fix the problem and push again.
 
 ## Roll back
