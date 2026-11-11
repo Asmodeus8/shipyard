@@ -22,6 +22,10 @@ The service serves a small operations console. It probes the load balancer every
 
 That makes load balancing, multi-AZ placement and zero-downtime rollouts visible.
 
+![A real rolling deploy on ECS, at 4x speed: the banner tracks the new release, four tasks serve during the overlap, and the success rate stays at 100%](docs/rolling-deploy.gif)
+
+<sub>Recorded live on 11 Nov while the pipeline deployed `401a8eb` over `1f9ccca` (4x speed). A probe sent 198 requests during the rollout, and none of them failed.</sub>
+
 ### Review in five minutes
 
 | Check | Where |
@@ -227,7 +231,7 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 Pipeline guarantees:
 - **Concurrency:** deploys are serialised (`deploy-production`, never cancelled midway), and superseded PR runs are cancelled.
 - **Repeatability:** the image tag is the commit SHA, and the infrastructure is declared in Terraform. Re-running a deploy for the same commit is a no-op.
-- **Zero downtime (measured twice):** probing the live URL once per second during a deploy gave 367 requests and 0 errors on 7 Nov, and 148 requests and 0 errors on 11 Nov (76 from the old release, 72 from the new one). Traffic moved from the old release, through a mixed phase, to the new one.
+- **Zero downtime (measured three times):** a probe hitting the live URL once per second during deploys got 0 errors in 367 requests (7 Nov), 0 in 148 and 0 in 198 (both 11 Nov). Traffic moves from the old release, through a mixed phase, to the new one.
 - **Safety:** ECS rolls the deployment back on its own when new tasks fail health checks, and the pipeline then fails because steady state is never reached.
 
 ---
