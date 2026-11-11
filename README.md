@@ -22,6 +22,10 @@ The service serves a small operations console. It probes the load balancer every
 
 That makes load balancing, multi-AZ placement and zero-downtime rollouts visible.
 
+![A real rolling deploy on ECS, at 4x speed: the banner tracks the new release, four tasks serve during the overlap, and the success rate stays at 100%](docs/rolling-deploy.gif)
+
+<sub>Recorded live on 11 Nov while the pipeline deployed `401a8eb` over `1f9ccca` (4x speed). A probe sent 198 requests during the rollout, and none of them failed.</sub>
+
 ### Review in five minutes
 
 | Check | Where |
@@ -227,7 +231,7 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 Pipeline guarantees:
 - **Concurrency:** deploys are serialised (`deploy-production`, never cancelled midway), and superseded PR runs are cancelled.
 - **Repeatability:** the image tag is the commit SHA, and the infrastructure is declared in Terraform. Re-running a deploy for the same commit is a no-op.
-- **Zero downtime (measured twice):** probing the live URL once per second during a deploy gave 367 requests and 0 errors on 7 Nov, and 148 requests and 0 errors on 11 Nov (76 from the old release, 72 from the new one). Traffic moved from the old release, through a mixed phase, to the new one.
+- **Zero downtime (measured three times):** a probe hitting the live URL once per second during deploys got 0 errors in 367 requests (7 Nov), 0 in 148 and 0 in 198 (both 11 Nov). Traffic moves from the old release, through a mixed phase, to the new one.
 - **Safety:** ECS rolls the deployment back on its own when new tasks fail health checks, and the pipeline then fails because steady state is never reached.
 
 ---
@@ -263,6 +267,38 @@ Pipeline guarantees:
 10:23:24Z  StateUpdate  Alarm updated from ALARM to OK
 10:23:24Z  Action       Successfully executed action arn:aws:sns:eu-west-1:…:shipyard-prod-alerts
 ```
+
+![Alarm timeline for alb-target-5xx: OK all morning, with the two drills at 10:23 and 10:43 showing as short ALARM marks](docs/alarm-drill.png)
+
+<sub>The `alb-target-5xx` timeline in CloudWatch. The red mark at 10:43 is the second drill, which also delivered the ALARM and OK emails to the subscribed address. The alarm stayed OK the rest of the time, with no real 5xx errors.</sub>
+
+<details>
+<summary>The ALARM email that arrived (excerpt)</summary>
+
+```text
+Alarm Details:
+- Name:                     shipyard-prod-alb-target-5xx
+- Description:              Targets returned more than 5 5xx responses in 5 minutes
+- State Change:             OK -> ALARM
+- Reason for State Change:  Alarm drill: verifying email delivery
+- Timestamp:                Wednesday 11 November, 2026 10:43:11 UTC
+
+Threshold:
+- The alarm is in the ALARM state when the metric is GreaterThanThreshold 5.0
+  for at least 1 of the last 1 period(s) of 300 seconds.
+
+Monitored Metric:
+- MetricNamespace:   AWS/ApplicationELB
+- MetricName:        HTTPCode_Target_5XX_Count
+- Dimensions:        [TargetGroup = targetgroup/shipyard-prod/…] [LoadBalancer = app/shipyard-prod/…]
+- TreatMissingData:  notBreaching
+
+State Change Actions:
+- OK:    [arn:aws:sns:eu-west-1:…:shipyard-prod-alerts]
+- ALARM: [arn:aws:sns:eu-west-1:…:shipyard-prod-alerts]
+```
+
+</details>
 
 **Runbook.** [`docs/runbook.md`](docs/runbook.md) covers the first five minutes of an incident, what each alarm means and how to fix it, rollback, rotating the Jenkins key, and scaling.
 
