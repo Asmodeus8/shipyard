@@ -272,6 +272,34 @@ Pipeline guarantees:
 
 <sub>The `alb-target-5xx` timeline in CloudWatch. The red mark at 10:43 is the second drill, which also delivered the ALARM and OK emails to the subscribed address. The alarm stayed OK the rest of the time, with no real 5xx errors.</sub>
 
+<details>
+<summary>The ALARM email that arrived (excerpt)</summary>
+
+```text
+Alarm Details:
+- Name:                     shipyard-prod-alb-target-5xx
+- Description:              Targets returned more than 5 5xx responses in 5 minutes
+- State Change:             OK -> ALARM
+- Reason for State Change:  Alarm drill: verifying email delivery
+- Timestamp:                Wednesday 11 November, 2026 10:43:11 UTC
+
+Threshold:
+- The alarm is in the ALARM state when the metric is GreaterThanThreshold 5.0
+  for at least 1 of the last 1 period(s) of 300 seconds.
+
+Monitored Metric:
+- MetricNamespace:   AWS/ApplicationELB
+- MetricName:        HTTPCode_Target_5XX_Count
+- Dimensions:        [TargetGroup = targetgroup/shipyard-prod/…] [LoadBalancer = app/shipyard-prod/…]
+- TreatMissingData:  notBreaching
+
+State Change Actions:
+- OK:    [arn:aws:sns:eu-west-1:…:shipyard-prod-alerts]
+- ALARM: [arn:aws:sns:eu-west-1:…:shipyard-prod-alerts]
+```
+
+</details>
+
 **Runbook.** [`docs/runbook.md`](docs/runbook.md) covers the first five minutes of an incident, what each alarm means and how to fix it, rollback, rotating the Jenkins key, and scaling.
 
 ---
