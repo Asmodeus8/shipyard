@@ -1,11 +1,12 @@
 # Shipyard
 
 [![pipeline](https://github.com/Asmodeus8/shipyard/actions/workflows/pipeline.yml/badge.svg)](https://github.com/Asmodeus8/shipyard/actions/workflows/pipeline.yml)
+![Jenkins](https://img.shields.io/badge/Jenkins-Jenkinsfile%20%2B%20JCasC-D24939?logo=jenkins&logoColor=white)
 ![Terraform](https://img.shields.io/badge/terraform-1.13-7B42BC?logo=terraform&logoColor=white)
 ![AWS](https://img.shields.io/badge/AWS-ECS%20Fargate-FF9900?logo=amazonecs&logoColor=white)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-A containerised web service deployed to **AWS ECS Fargate** behind an **Application Load Balancer**. Terraform provisions it, a **CI/CD pipeline** (GitHub Actions, with an equivalent Jenkins pipeline) ships it, and **CloudWatch** monitors it.
+A containerised web service deployed to **AWS ECS Fargate** behind an **Application Load Balancer**. Terraform provisions it, a **CI/CD pipeline** ships it, and **CloudWatch** monitors it. The pipeline runs on **Jenkins** (a declarative `Jenkinsfile` on a controller defined entirely as code) and on **GitHub Actions**. Both call the same scripts and deploy to the same environment.
 
 A push to `main` runs tests, builds and scans an image, pushes it to ECR, applies Terraform, rolls the ECS service, and smoke-tests the live URL. You do nothing by hand after the one-time bootstrap.
 
@@ -20,6 +21,17 @@ The service serves a small operations console. It probes the load balancer every
 - a banner while a rolling deployment is replacing tasks
 
 That makes load balancing, multi-AZ placement and zero-downtime rollouts visible.
+
+### Review in five minutes
+
+| Check | Where |
+|---|---|
+| The service is live and reports its release | [Live URL](http://shipyard-prod-2113359311.eu-west-1.elb.amazonaws.com) · [`/api/version`](http://shipyard-prod-2113359311.eu-west-1.elb.amazonaws.com/api/version) |
+| A full Jenkins run (all eleven stages, deploy included) | [Jenkins pipeline](#jenkins) |
+| A full GitHub Actions run | [Actions tab](https://github.com/Asmodeus8/shipyard/actions/workflows/pipeline.yml) |
+| Infrastructure as code | [`infra/`](infra) - five modules, one root stack, a bootstrap stack |
+| Monitoring | [CloudWatch dashboard and alarms](#monitoring-and-logging) |
+| Rollback and teardown | [`rollback.yml`](.github/workflows/rollback.yml) · [`destroy.yml`](.github/workflows/destroy.yml) |
 
 ---
 
@@ -91,7 +103,7 @@ flowchart LR
 │   └── envs/               prod.tfvars · staging.tfvars
 ├── scripts/                build-push · terraform · smoke-test · bootstrap
 ├── .github/                pipeline · rollback · destroy workflows, Dependabot
-├── Jenkinsfile             same stages for Jenkins
+├── Jenkinsfile             declarative Jenkins pipeline
 ├── jenkins/                Jenkins controller as code (JCasC, plugins, compose)
 ├── .checkov.yaml           IaC scan policy and accepted risks
 ├── docker-compose.yml      local stack: 3 replicas behind nginx
@@ -147,7 +159,7 @@ This creates the Terraform state bucket, the ECR repository, the GitHub OIDC pro
 git push origin main
 ```
 
-The pipeline builds, pushes, applies and smoke-tests. The job summary links to the service URL and the CloudWatch dashboard. Every later push to `main` repeats the same steps. Pull requests get a `terraform plan` from a read-only role.
+Jenkins picks up the push on its next branch scan, and GitHub Actions starts right away. Either one builds, pushes, applies and smoke-tests. To run the Jenkins controller, see [Jenkins](#jenkins). In GitHub Actions, the job summary links to the service URL and the CloudWatch dashboard. Every later push to `main` repeats the same steps. Pull requests get a `terraform plan` from a read-only role.
 
 To receive alarm emails, add addresses to `alarm_emails` in `infra/envs/prod.tfvars` and confirm the SNS subscription email.
 
@@ -163,9 +175,27 @@ gh workflow run rollback -f release=2399cd5
 
 Run the **destroy** workflow in the Actions tab and type the environment name to confirm. Then remove the bootstrap stack with `terraform -chdir=infra/bootstrap destroy`.
 
-### Using Jenkins instead
+---
 
-The `Jenkinsfile` runs the same stages and calls the same scripts. The `jenkins/` folder holds a controller defined entirely as code: plugins, the admin user, the AWS credential, and the multibranch job, all seeded by JCasC.
+## CI/CD pipeline
+
+Both CI systems run the same stages and call the same scripts in [`scripts/`](scripts), so either one can ship a release, and they end up with the same infrastructure state.
+
+### Jenkins
+
+[`Jenkinsfile`](Jenkinsfile) is a declarative pipeline. [`jenkins/`](jenkins) defines the controller entirely as code: the image and plugins ([`plugins.txt`](jenkins/plugins.txt)), the admin user, the AWS credential and the multibranch job, all seeded by [JCasC](jenkins/casc.yaml). A fresh controller is ready to build with no setup in the UI.
+
+| Stage | Branches | What it does |
+|---|---|---|
+| **Verify** (parallel) | all | **Unit tests** inside the Docker `test` stage · **Terraform** `fmt -check` and `validate` · **IaC scan** with Checkov |
+| **Build image** | all | Runtime image tagged with the commit SHA |
+| **Image scan** | all | Trivy; fails on fixable HIGH/CRITICAL CVEs |
+| **Container check** | all | Runs the image read-only, waits for the Docker health check, confirms `/api/version` reports the commit |
+| **Push to ECR** | `main` | Pushes `:<git-sha>`; skipped if the tag exists |
+| **Deploy** | `main` | `terraform apply` with the new image tag, waiting for ECS steady state |
+| **Smoke test** | `main` | Polls the live URL until 5 responses in a row serve the new SHA |
+
+The pipeline won't run two builds at once, times out after 45 minutes, and keeps the last 30 builds. A successful build's description shows the release and its URL. Jenkins deploys with the `shipyard-jenkins` IAM user, which has the same scoped policy as the GitHub deploy role. A self-hosted controller can't use GitHub's OIDC, so this is the one long-lived key, kept in Jenkins' credential store.
 
 ```bash
 terraform -chdir=infra/bootstrap plan -out=tfplan -var github_repository=<owner>/<repo> -var create_jenkins_user=true
@@ -180,11 +210,9 @@ Jenkins scans the repository every 5 minutes. It runs verification on every bran
 
 <sub>Build #2 of `main` on the local controller, using the `shipyard-jenkins` IAM user. GitHub Actions had already shipped the same commit, so Jenkins found the image in ECR and Terraform reported no changes. Both pipelines converge on the same state.</sub>
 
----
+### GitHub Actions
 
-## CI/CD pipeline
-
-[`pipeline.yml`](.github/workflows/pipeline.yml)
+[`pipeline.yml`](.github/workflows/pipeline.yml) authenticates to AWS with OIDC, so GitHub stores no AWS keys.
 
 | Job | Trigger | What it does |
 |---|---|---|
